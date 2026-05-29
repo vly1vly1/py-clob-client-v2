@@ -20,7 +20,13 @@ POST = "POST"
 DELETE = "DELETE"
 PUT = "PUT"
 
-_http_client = httpx.Client(http2=True)
+# http2=False: this module-level client is shared across threads (bot.py drives
+# CLOB calls from a ThreadPoolExecutor via run_in_executor). httpcore's HTTP/2
+# state machine is not safe for concurrent streams across OS threads — concurrent
+# reads on the shared connection corrupt memory and SIGSEGV in _read_incoming_data
+# (faulthandler-confirmed lockstep crash of bot.py + barrier_bot.py, 2026-05-29).
+# HTTP/1.1 uses one connection per concurrent request from the pool — thread-safe.
+_http_client = httpx.Client(http2=False, timeout=httpx.Timeout(10.0))
 
 def _overload_headers(method: str, headers: dict) -> dict:
     if headers is None:
